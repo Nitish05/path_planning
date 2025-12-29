@@ -5,14 +5,16 @@ export function* bfs(options: PathfindingOptions): PathfindingGenerator {
 
   yield { type: 'start', nodeId: start.id, node: start };
 
+  // Use index-based queue to avoid O(n) shift() operation
   const queue: string[] = [start.id];
+  let queueHead = 0;
   const visited = new Set<string>([start.id]);
   const cameFrom = new Map<string, string>();
 
   let visitedCount = 0;
 
-  while (queue.length > 0) {
-    const currentId = queue.shift()!;
+  while (queueHead < queue.length) {
+    const currentId = queue[queueHead++];
     const current = graph.nodes.get(currentId)!;
 
     visitedCount++;

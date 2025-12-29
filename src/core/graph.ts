@@ -197,7 +197,18 @@ export function findNearestNodeByScreen(
   return nearestNode;
 }
 
-// Heuristic function for A* (Euclidean distance)
+// Fast heuristic for A* using equirectangular approximation
+// Much faster than Haversine (no trig functions), still admissible
 export function heuristic(node: GraphNode, goal: GraphNode): number {
-  return haversineDistance(node.lat, node.lon, goal.lat, goal.lon);
+  const R = 6371000; // Earth's radius in meters
+  const DEG_TO_RAD = Math.PI / 180;
+
+  // Equirectangular approximation - fast and accurate for small distances
+  const avgLat = (node.lat + goal.lat) / 2 * DEG_TO_RAD;
+  const cosLat = Math.cos(avgLat);  // Only one trig call vs 6+ in Haversine
+
+  const dx = (goal.lon - node.lon) * DEG_TO_RAD * cosLat;
+  const dy = (goal.lat - node.lat) * DEG_TO_RAD;
+
+  return R * Math.sqrt(dx * dx + dy * dy);
 }

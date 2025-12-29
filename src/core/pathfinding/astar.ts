@@ -8,19 +8,32 @@ export function* astar(options: PathfindingOptions): PathfindingGenerator {
   const openSet = new PriorityQueue<string>();
   const cameFrom = new Map<string, string>();
   const gScore = new Map<string, number>();
-  const fScore = new Map<string, number>();
-  const inOpenSet = new Set<string>();
+  const closedSet = new Set<string>();  // Track processed nodes
+  const hCache = new Map<string, number>();  // Cache heuristic values
+
+  // Cached heuristic lookup
+  const getHeuristic = (nodeId: string): number => {
+    let h = hCache.get(nodeId);
+    if (h === undefined) {
+      const node = graph.nodes.get(nodeId)!;
+      h = heuristic(node, end);
+      hCache.set(nodeId, h);
+    }
+    return h;
+  };
 
   gScore.set(start.id, 0);
-  fScore.set(start.id, heuristic(start, end));
-  openSet.push(start.id, fScore.get(start.id)!);
-  inOpenSet.add(start.id);
+  openSet.push(start.id, getHeuristic(start.id));
 
   let visitedCount = 0;
 
   while (!openSet.isEmpty()) {
     const currentId = openSet.pop()!;
-    inOpenSet.delete(currentId);
+
+    // Skip if already processed (closed)
+    if (closedSet.has(currentId)) continue;
+    closedSet.add(currentId);
+
     const current = graph.nodes.get(currentId)!;
 
     visitedCount++;
@@ -33,25 +46,21 @@ export function* astar(options: PathfindingOptions): PathfindingGenerator {
     }
 
     const neighbors = graph.adjacency.get(currentId) || [];
+    const currentG = gScore.get(currentId)!;
 
     for (const edge of neighbors) {
-      const tentativeG = (gScore.get(currentId) ?? Infinity) + edge.weight;
+      // Skip already processed nodes
+      if (closedSet.has(edge.to)) continue;
+
+      const tentativeG = currentG + edge.weight;
       const neighborG = gScore.get(edge.to) ?? Infinity;
 
       if (tentativeG < neighborG) {
         cameFrom.set(edge.to, currentId);
         gScore.set(edge.to, tentativeG);
 
-        const neighbor = graph.nodes.get(edge.to);
-        if (!neighbor) continue;
-
-        const f = tentativeG + heuristic(neighbor, end);
-        fScore.set(edge.to, f);
-
-        if (!inOpenSet.has(edge.to)) {
-          openSet.push(edge.to, f);
-          inOpenSet.add(edge.to);
-        }
+        const f = tentativeG + getHeuristic(edge.to);
+        openSet.push(edge.to, f);
       }
     }
   }

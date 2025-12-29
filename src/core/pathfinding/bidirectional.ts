@@ -6,6 +6,28 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
 
   yield { type: 'start', nodeId: start.id, node: start };
 
+  // Heuristic caches for both directions
+  const forwardHCache = new Map<string, number>();
+  const backwardHCache = new Map<string, number>();
+
+  const getForwardH = (nodeId: string): number => {
+    let h = forwardHCache.get(nodeId);
+    if (h === undefined) {
+      h = heuristic(graph.nodes.get(nodeId)!, end);
+      forwardHCache.set(nodeId, h);
+    }
+    return h;
+  };
+
+  const getBackwardH = (nodeId: string): number => {
+    let h = backwardHCache.get(nodeId);
+    if (h === undefined) {
+      h = heuristic(graph.nodes.get(nodeId)!, start);
+      backwardHCache.set(nodeId, h);
+    }
+    return h;
+  };
+
   // Forward search state
   const forwardOpen = new PriorityQueue<string>();
   const forwardCameFrom = new Map<string, string>();
@@ -20,11 +42,11 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
 
   // Initialize forward search
   forwardG.set(start.id, 0);
-  forwardOpen.push(start.id, heuristic(start, end));
+  forwardOpen.push(start.id, getForwardH(start.id));
 
   // Initialize backward search
   backwardG.set(end.id, 0);
-  backwardOpen.push(end.id, heuristic(end, start));
+  backwardOpen.push(end.id, getBackwardH(end.id));
 
   let visitedCount = 0;
   let bestPath: GraphNode[] | null = null;
@@ -52,13 +74,13 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         }
 
         const neighbors = graph.adjacency.get(currentId) || [];
+        const currentG = forwardG.get(currentId)!;
         for (const edge of neighbors) {
-          const tentativeG = (forwardG.get(currentId) ?? Infinity) + edge.weight;
+          const tentativeG = currentG + edge.weight;
           if (tentativeG < (forwardG.get(edge.to) ?? Infinity)) {
             forwardCameFrom.set(edge.to, currentId);
             forwardG.set(edge.to, tentativeG);
-            const neighbor = graph.nodes.get(edge.to)!;
-            forwardOpen.push(edge.to, tentativeG + heuristic(neighbor, end));
+            forwardOpen.push(edge.to, tentativeG + getForwardH(edge.to));
           }
         }
       }
@@ -84,13 +106,13 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         }
 
         const neighbors = graph.adjacency.get(currentId) || [];
+        const currentG = backwardG.get(currentId)!;
         for (const edge of neighbors) {
-          const tentativeG = (backwardG.get(currentId) ?? Infinity) + edge.weight;
+          const tentativeG = currentG + edge.weight;
           if (tentativeG < (backwardG.get(edge.to) ?? Infinity)) {
             backwardCameFrom.set(edge.to, currentId);
             backwardG.set(edge.to, tentativeG);
-            const neighbor = graph.nodes.get(edge.to)!;
-            backwardOpen.push(edge.to, tentativeG + heuristic(neighbor, start));
+            backwardOpen.push(edge.to, tentativeG + getBackwardH(edge.to));
           }
         }
       }
@@ -98,14 +120,15 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
 
     // Early termination check
     if (meetingNode !== null) {
-      // Reconstruct path
-      const forwardPath: GraphNode[] = [];
+      // Reconstruct forward path (build reversed, then reverse once - O(n) vs O(n²) for unshift)
+      const forwardReversed: GraphNode[] = [];
       let node = meetingNode;
       while (forwardCameFrom.has(node)) {
-        forwardPath.unshift(graph.nodes.get(node)!);
+        forwardReversed.push(graph.nodes.get(node)!);
         node = forwardCameFrom.get(node)!;
       }
-      forwardPath.unshift(graph.nodes.get(node)!);
+      forwardReversed.push(graph.nodes.get(node)!);
+      forwardReversed.reverse();
 
       const backwardPath: GraphNode[] = [];
       node = meetingNode;
@@ -114,7 +137,7 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         backwardPath.push(graph.nodes.get(node)!);
       }
 
-      bestPath = [...forwardPath, ...backwardPath];
+      bestPath = [...forwardReversed, ...backwardPath];
       break;
     }
   }
