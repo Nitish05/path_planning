@@ -10,6 +10,8 @@ import { AlgorithmSelector } from './components/AlgorithmSelector';
 import { ControlPanel } from './components/ControlPanel';
 import { Legend } from './components/Legend';
 import { ColorPicker } from './components/ColorPicker';
+import { initWasm } from './core/pathfinding/wasm-loader';
+import { clearWasmGraph } from './core/pathfinding';
 
 function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +51,13 @@ function App() {
     handleClick,
     reset: resetPoints
   } = useMapInteraction(graph, bounds);
+
+  // Initialize WASM module
+  useEffect(() => {
+    initWasm().catch(err => {
+      console.warn('Failed to initialize WASM, will use JS fallback:', err);
+    });
+  }, []);
 
   // Initialize PixiJS
   useEffect(() => {
@@ -197,6 +206,7 @@ function App() {
     setSelectedCity(city);
     resetPathfinding();
     resetPoints();
+    clearWasmGraph(); // Clear cached WASM graph when city changes
 
     if (rendererRef.current) {
       rendererRef.current.clearAll();
