@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use crate::graph::{WasmGraph, WasmGraphHandle};
 use crate::heuristic::equirectangular_distance;
 use crate::priority_queue::MinHeap;
-use crate::types::{WasmGraphNode, WasmPathfindingStep};
+use crate::types::{InstantResult, WasmGraphNode, WasmPathfindingStep};
 
 /// A* pathfinding algorithm solver
 #[wasm_bindgen]
@@ -195,5 +195,63 @@ impl AStarSolver {
     #[wasm_bindgen(js_name = isDone)]
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    /// Run the algorithm to completion without yielding (for instant mode)
+    /// Returns InstantResult with path and all visited nodes for replay visualization
+    #[wasm_bindgen(js_name = runToCompletion)]
+    pub fn run_to_completion(&mut self) -> JsValue {
+        let graph = unsafe { &*self.graph_ptr };
+        let mut visited_nodes: Vec<WasmGraphNode> = Vec::new();
+
+        while !self.open_set.is_empty() {
+            let current_idx = self.open_set.pop().unwrap();
+
+            if self.closed_set.contains(&current_idx) {
+                continue;
+            }
+
+            self.closed_set.insert(current_idx);
+            self.visited_count += 1;
+            visited_nodes.push(graph.node_to_output(current_idx));
+
+            if current_idx == self.end_idx {
+                self.done = true;
+                let path = self.reconstruct_path();
+                let result = InstantResult {
+                    path,
+                    visited_count: self.visited_count,
+                    visited_nodes,
+                };
+                return serde_wasm_bindgen::to_value(&result).unwrap();
+            }
+
+            let current_g = self.g_score[&current_idx];
+
+            for edge in graph.neighbors(current_idx) {
+                if self.closed_set.contains(&edge.to) {
+                    continue;
+                }
+
+                let tentative_g = current_g + edge.weight;
+                let neighbor_g = self.g_score.get(&edge.to).copied().unwrap_or(f64::INFINITY);
+
+                if tentative_g < neighbor_g {
+                    self.came_from.insert(edge.to, current_idx);
+                    self.g_score.insert(edge.to, tentative_g);
+                    let h = self.compute_heuristic(edge.to);
+                    let f = tentative_g + h;
+                    self.open_set.push(edge.to, f);
+                }
+            }
+        }
+
+        self.done = true;
+        let result = InstantResult {
+            path: vec![],
+            visited_count: self.visited_count,
+            visited_nodes,
+        };
+        serde_wasm_bindgen::to_value(&result).unwrap()
     }
 }

@@ -49,9 +49,30 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
   backwardOpen.push(end.id, getBackwardH(end.id));
 
   let visitedCount = 0;
-  let bestPath: GraphNode[] | null = null;
-  let bestCost = Infinity;
   let meetingNode: string | null = null;
+
+  // Helper to reconstruct path when meeting point is found
+  const reconstructPath = (meeting: string): GraphNode[] => {
+    // Reconstruct forward path (build reversed, then reverse once)
+    const forwardReversed: GraphNode[] = [];
+    let node = meeting;
+    while (forwardCameFrom.has(node)) {
+      forwardReversed.push(graph.nodes.get(node)!);
+      node = forwardCameFrom.get(node)!;
+    }
+    forwardReversed.push(graph.nodes.get(node)!);
+    forwardReversed.reverse();
+
+    // Reconstruct backward path
+    const backwardPath: GraphNode[] = [];
+    node = meeting;
+    while (backwardCameFrom.has(node)) {
+      node = backwardCameFrom.get(node)!;
+      backwardPath.push(graph.nodes.get(node)!);
+    }
+
+    return [...forwardReversed, ...backwardPath];
+  };
 
   while (!forwardOpen.isEmpty() || !backwardOpen.isEmpty()) {
     // Expand forward
@@ -64,13 +85,12 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         visitedCount++;
         yield { type: 'visit', nodeId: currentId, node: current, visitedCount, fromDirection: 'forward' };
 
-        // Check if we've met the backward search
+        // Check if we've met the backward search - STOP IMMEDIATELY
         if (backwardVisited.has(currentId)) {
-          const pathCost = (forwardG.get(currentId) || 0) + (backwardG.get(currentId) || 0);
-          if (pathCost < bestCost) {
-            bestCost = pathCost;
-            meetingNode = currentId;
-          }
+          meetingNode = currentId;
+          const path = reconstructPath(meetingNode);
+          yield { type: 'complete', path, visitedCount };
+          return;
         }
 
         const neighbors = graph.adjacency.get(currentId) || [];
@@ -96,13 +116,12 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         visitedCount++;
         yield { type: 'visit', nodeId: currentId, node: current, visitedCount, fromDirection: 'backward' };
 
-        // Check if we've met the forward search
+        // Check if we've met the forward search - STOP IMMEDIATELY
         if (forwardVisited.has(currentId)) {
-          const pathCost = (forwardG.get(currentId) || 0) + (backwardG.get(currentId) || 0);
-          if (pathCost < bestCost) {
-            bestCost = pathCost;
-            meetingNode = currentId;
-          }
+          meetingNode = currentId;
+          const path = reconstructPath(meetingNode);
+          yield { type: 'complete', path, visitedCount };
+          return;
         }
 
         const neighbors = graph.adjacency.get(currentId) || [];
@@ -117,34 +136,8 @@ export function* bidirectional(options: PathfindingOptions): PathfindingGenerato
         }
       }
     }
-
-    // Early termination check
-    if (meetingNode !== null) {
-      // Reconstruct forward path (build reversed, then reverse once - O(n) vs O(n²) for unshift)
-      const forwardReversed: GraphNode[] = [];
-      let node = meetingNode;
-      while (forwardCameFrom.has(node)) {
-        forwardReversed.push(graph.nodes.get(node)!);
-        node = forwardCameFrom.get(node)!;
-      }
-      forwardReversed.push(graph.nodes.get(node)!);
-      forwardReversed.reverse();
-
-      const backwardPath: GraphNode[] = [];
-      node = meetingNode;
-      while (backwardCameFrom.has(node)) {
-        node = backwardCameFrom.get(node)!;
-        backwardPath.push(graph.nodes.get(node)!);
-      }
-
-      bestPath = [...forwardReversed, ...backwardPath];
-      break;
-    }
   }
 
-  if (bestPath) {
-    yield { type: 'complete', path: bestPath, visitedCount };
-  } else {
-    yield { type: 'complete', path: [], visitedCount };
-  }
+  // No path found
+  yield { type: 'complete', path: [], visitedCount };
 }

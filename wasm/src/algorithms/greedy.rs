@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use crate::graph::{WasmGraph, WasmGraphHandle};
 use crate::heuristic::equirectangular_distance;
 use crate::priority_queue::MinHeap;
-use crate::types::{WasmGraphNode, WasmPathfindingStep};
+use crate::types::{InstantResult, WasmGraphNode, WasmPathfindingStep};
 
 /// Greedy Best-First Search pathfinding algorithm solver
 /// Uses only heuristic (h-score), ignores actual distance traveled
@@ -145,5 +145,50 @@ impl GreedySolver {
     #[wasm_bindgen(js_name = isDone)]
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    #[wasm_bindgen(js_name = runToCompletion)]
+    pub fn run_to_completion(&mut self) -> JsValue {
+        let graph = unsafe { &*self.graph_ptr };
+        let mut visited_nodes: Vec<WasmGraphNode> = Vec::new();
+
+        while !self.open_set.is_empty() {
+            let current_idx = self.open_set.pop().unwrap();
+
+            if self.visited.contains(&current_idx) {
+                continue;
+            }
+
+            self.visited.insert(current_idx);
+            self.visited_count += 1;
+            visited_nodes.push(graph.node_to_output(current_idx));
+
+            if current_idx == self.end_idx {
+                self.done = true;
+                let path = self.reconstruct_path();
+                let result = InstantResult {
+                    path,
+                    visited_count: self.visited_count,
+                    visited_nodes,
+                };
+                return serde_wasm_bindgen::to_value(&result).unwrap();
+            }
+
+            for edge in graph.neighbors(current_idx) {
+                if !self.visited.contains(&edge.to) {
+                    self.came_from.entry(edge.to).or_insert(current_idx);
+                    let h = self.compute_heuristic(edge.to);
+                    self.open_set.push(edge.to, h);
+                }
+            }
+        }
+
+        self.done = true;
+        let result = InstantResult {
+            path: vec![],
+            visited_count: self.visited_count,
+            visited_nodes,
+        };
+        serde_wasm_bindgen::to_value(&result).unwrap()
     }
 }

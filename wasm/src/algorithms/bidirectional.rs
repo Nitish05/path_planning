@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use crate::graph::{WasmGraph, WasmGraphHandle};
 use crate::heuristic::equirectangular_distance;
 use crate::priority_queue::MinHeap;
-use crate::types::{WasmGraphNode, WasmPathfindingStep};
+use crate::types::{InstantResult, WasmGraphNode, WasmPathfindingStep};
 
 /// Bidirectional A* pathfinding algorithm solver
 /// Searches from both start and end simultaneously
@@ -273,15 +273,13 @@ impl BidirectionalSolver {
     }
 
     fn should_terminate(&self) -> bool {
-        // Terminate when both open sets are empty or when we've found
-        // a meeting point and both searches have exhausted their potential
+        // Terminate when both open sets are empty
         if self.forward_open.is_empty() && self.backward_open.is_empty() {
             return true;
         }
 
+        // Terminate immediately when a meeting point is found
         self.best_meeting.is_some()
-            && self.forward_open.is_empty()
-            && self.backward_open.is_empty()
     }
 
     #[wasm_bindgen(js_name = nextStep)]
@@ -369,5 +367,113 @@ impl BidirectionalSolver {
     #[wasm_bindgen(js_name = isDone)]
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    #[wasm_bindgen(js_name = runToCompletion)]
+    pub fn run_to_completion(&mut self) -> JsValue {
+        let graph = unsafe { &*self.graph_ptr };
+        let mut visited_nodes: Vec<WasmGraphNode> = Vec::new();
+
+        while !self.forward_open.is_empty() || !self.backward_open.is_empty() {
+            // Forward step
+            if !self.forward_open.is_empty() {
+                if let Some(current_idx) = self.forward_open.pop() {
+                    if !self.forward_visited.contains(&current_idx) {
+                        self.forward_visited.insert(current_idx);
+                        self.visited_count += 1;
+                        visited_nodes.push(graph.node_to_output(current_idx));
+
+                        if self.backward_visited.contains(&current_idx) {
+                            let cost = self.forward_g[&current_idx] + self.backward_g[&current_idx];
+                            if cost < self.best_cost {
+                                self.best_cost = cost;
+                                self.best_meeting = Some(current_idx);
+                            }
+                        }
+
+                        let current_g = self.forward_g[&current_idx];
+                        for edge in graph.neighbors(current_idx) {
+                            if !self.forward_visited.contains(&edge.to) {
+                                let tentative_g = current_g + edge.weight;
+                                let neighbor_g = self.forward_g.get(&edge.to).copied().unwrap_or(f64::INFINITY);
+                                if tentative_g < neighbor_g {
+                                    self.forward_came_from.insert(edge.to, current_idx);
+                                    self.forward_g.insert(edge.to, tentative_g);
+                                    let h = self.compute_forward_heuristic(edge.to);
+                                    self.forward_open.push(edge.to, tentative_g + h);
+
+                                    if let Some(&backward_g) = self.backward_g.get(&edge.to) {
+                                        let cost = tentative_g + backward_g;
+                                        if cost < self.best_cost {
+                                            self.best_cost = cost;
+                                            self.best_meeting = Some(edge.to);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Backward step
+            if !self.backward_open.is_empty() {
+                if let Some(current_idx) = self.backward_open.pop() {
+                    if !self.backward_visited.contains(&current_idx) {
+                        self.backward_visited.insert(current_idx);
+                        self.visited_count += 1;
+                        visited_nodes.push(graph.node_to_output(current_idx));
+
+                        if self.forward_visited.contains(&current_idx) {
+                            let cost = self.forward_g[&current_idx] + self.backward_g[&current_idx];
+                            if cost < self.best_cost {
+                                self.best_cost = cost;
+                                self.best_meeting = Some(current_idx);
+                            }
+                        }
+
+                        let current_g = self.backward_g[&current_idx];
+                        for edge in graph.neighbors(current_idx) {
+                            if !self.backward_visited.contains(&edge.to) {
+                                let tentative_g = current_g + edge.weight;
+                                let neighbor_g = self.backward_g.get(&edge.to).copied().unwrap_or(f64::INFINITY);
+                                if tentative_g < neighbor_g {
+                                    self.backward_came_from.insert(edge.to, current_idx);
+                                    self.backward_g.insert(edge.to, tentative_g);
+                                    let h = self.compute_backward_heuristic(edge.to);
+                                    self.backward_open.push(edge.to, tentative_g + h);
+
+                                    if let Some(&forward_g) = self.forward_g.get(&edge.to) {
+                                        let cost = tentative_g + forward_g;
+                                        if cost < self.best_cost {
+                                            self.best_cost = cost;
+                                            self.best_meeting = Some(edge.to);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Early termination - stop immediately when meeting point is found
+            if self.best_meeting.is_some() {
+                break;
+            }
+        }
+
+        self.done = true;
+        let path = if let Some(meeting) = self.best_meeting {
+            self.reconstruct_path(meeting)
+        } else {
+            vec![]
+        };
+        let result = InstantResult {
+            path,
+            visited_count: self.visited_count,
+            visited_nodes,
+        };
+        serde_wasm_bindgen::to_value(&result).unwrap()
     }
 }

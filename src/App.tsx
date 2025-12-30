@@ -42,7 +42,10 @@ function App() {
     reset: resetPathfinding,
     speed,
     setSpeed,
-    onStep
+    onStep,
+    instantMode,
+    setInstantMode,
+    executionTime
   } = usePathfinding();
 
   const {
@@ -286,10 +289,13 @@ function App() {
           canStart={canStart}
           isRunning={isRunning}
           speed={speed}
+          instantMode={instantMode}
+          executionTime={executionTime}
           onStart={handleStart}
           onStop={stopPathfinding}
           onReset={handleReset}
           onSpeedChange={setSpeed}
+          onInstantModeChange={setInstantMode}
         />
 
         <ColorPicker

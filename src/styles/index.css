@@ -509,3 +509,71 @@ select option {
   background: rgba(0, 255, 255, 0.3);
   transform: scale(0.95);
 }
+
+/* Instant Mode Toggle */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #00ffff;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.toggle-text {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.instant-badge {
+  background: linear-gradient(135deg, #ff6b00, #ff9500);
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 107, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(255, 149, 0, 0.8);
+  }
+}
+
+.instant-hint {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+  margin-left: 26px;
+}
+
+.execution-time {
+  padding: 8px 12px;
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  border-radius: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.execution-time .highlight {
+  color: #00ff00;
+  font-weight: 600;
+}

@@ -36,6 +36,16 @@ pub enum WasmPathfindingStep {
     },
 }
 
+/// Result for instant mode with all visited nodes for replay visualization
+#[derive(Serialize)]
+pub struct InstantResult {
+    pub path: Vec<WasmGraphNode>,
+    #[serde(rename = "visitedCount")]
+    pub visited_count: u32,
+    #[serde(rename = "visitedNodes")]
+    pub visited_nodes: Vec<WasmGraphNode>,
+}
+
 /// Input data structures from JavaScript
 #[derive(Deserialize)]
 pub struct SerializedNode {

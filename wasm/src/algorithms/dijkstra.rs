@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::graph::{WasmGraph, WasmGraphHandle};
 use crate::priority_queue::MinHeap;
-use crate::types::{WasmGraphNode, WasmPathfindingStep};
+use crate::types::{InstantResult, WasmGraphNode, WasmPathfindingStep};
 
 /// Dijkstra's pathfinding algorithm solver
 #[wasm_bindgen]
@@ -147,5 +147,59 @@ impl DijkstraSolver {
     #[wasm_bindgen(js_name = isDone)]
     pub fn is_done(&self) -> bool {
         self.done
+    }
+
+    #[wasm_bindgen(js_name = runToCompletion)]
+    pub fn run_to_completion(&mut self) -> JsValue {
+        let graph = unsafe { &*self.graph_ptr };
+        let mut visited_nodes: Vec<WasmGraphNode> = Vec::new();
+
+        while !self.open_set.is_empty() {
+            let current_idx = self.open_set.pop().unwrap();
+
+            if self.visited.contains(&current_idx) {
+                continue;
+            }
+
+            self.visited.insert(current_idx);
+            self.visited_count += 1;
+            visited_nodes.push(graph.node_to_output(current_idx));
+
+            if current_idx == self.end_idx {
+                self.done = true;
+                let path = self.reconstruct_path();
+                let result = InstantResult {
+                    path,
+                    visited_count: self.visited_count,
+                    visited_nodes,
+                };
+                return serde_wasm_bindgen::to_value(&result).unwrap();
+            }
+
+            let current_dist = self.distance[&current_idx];
+
+            for edge in graph.neighbors(current_idx) {
+                if self.visited.contains(&edge.to) {
+                    continue;
+                }
+
+                let new_dist = current_dist + edge.weight;
+                let old_dist = self.distance.get(&edge.to).copied().unwrap_or(f64::INFINITY);
+
+                if new_dist < old_dist {
+                    self.came_from.insert(edge.to, current_idx);
+                    self.distance.insert(edge.to, new_dist);
+                    self.open_set.push(edge.to, new_dist);
+                }
+            }
+        }
+
+        self.done = true;
+        let result = InstantResult {
+            path: vec![],
+            visited_count: self.visited_count,
+            visited_nodes,
+        };
+        serde_wasm_bindgen::to_value(&result).unwrap()
     }
 }
