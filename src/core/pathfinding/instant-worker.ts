@@ -4,6 +4,8 @@
 
 import { Graph, GraphNode, AlgorithmType } from '../types';
 import { serializeGraph } from '../graph-serializer';
+// Import worker using Vite's ?worker syntax for proper bundling
+import PathfindingWorker from '../../workers/pathfinding.worker?worker';
 
 interface WorkerResult {
   path: GraphNode[];
@@ -16,9 +18,7 @@ let worker: Worker | null = null;
 
 function getOrCreateWorker(): Worker {
   if (!worker) {
-    // Create worker using standard Worker constructor with module type
-    const workerUrl = new URL('../../workers/pathfinding.worker.ts', import.meta.url);
-    worker = new Worker(workerUrl, { type: 'module' });
+    worker = new PathfindingWorker();
   }
   return worker;
 }
